@@ -101,17 +101,31 @@ async function seedRevenue() {
   return insertedRevenue;
 }
 
+async function dropDatabase(sql: postgres.Sql) {
+  // Drop in correct order (to avoid foreign key issues later)
+  await sql`DROP TABLE IF EXISTS invoices`;
+  await sql`DROP TABLE IF EXISTS customers`;
+  await sql`DROP TABLE IF EXISTS users`;
+  await sql`DROP TABLE IF EXISTS revenue`;
+}
+
+
 export async function GET() {
   try {
-    const result = await sql.begin((sql) => [
-      seedUsers(),
-      seedCustomers(),
-      seedInvoices(),
-      seedRevenue(),
-    ]);
+    await sql.begin(async (tx) => {
+      // Clean up old data first
+      await dropDatabase(tx);
 
-    return Response.json({ message: 'Database seeded successfully' });
+      // Recreate tables + seed fresh data
+      await seedUsers();
+      await seedCustomers();
+      await seedInvoices();
+      await seedRevenue();
+    });
+
+    return Response.json({ message: 'Database dropped and seeded successfully' });
   } catch (error) {
-    return Response.json({ error }, { status: 500 });
+    console.error(error);
+    return Response.json({ error: String(error) }, { status: 500 });
   }
 }
